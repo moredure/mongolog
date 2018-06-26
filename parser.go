@@ -1,5 +1,9 @@
 package main
 
+import (
+	"time"
+)
+
 type Parser interface {
-  Parse() (*time.Time, string, error)
+	Parse(string) (*time.Time, string, error)
 }
