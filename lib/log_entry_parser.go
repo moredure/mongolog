@@ -12,7 +12,7 @@ const (
 )
 
 var TimeLayoutByFormat = map[string]string{
-	"first_format":  "Feb 1, 2018 at 3:04:05pm (UTC)",
+	"first_format":  "Jan 1, 2006 at 3:04:05pm (UTC)",
 	"second_format": time.RFC3339,
 }
 
