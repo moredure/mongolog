@@ -2,77 +2,58 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"github.com/mikefaraponov/mongolog/lib"
 	"gopkg.in/mgo.v2"
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
-	"time"
 )
 
-type App struct {
-	Session                   *mgo.Session
-	Stop                      chan os.Signal
-	FileTrackersExitWaitGroup *sync.WaitGroup
-	Tracker                   *FileTracker
-}
+const (
+	MONGO_URL         = "MONGO_URL"
+	DB_FROM_MONGO_URL = ""
+)
 
 func main() {
-	var (
-		format             string
-		logsCollectionName string
-		exitSync           []chan struct{}
-		timeLayoutByFormat = map[string]string{
-			"first_format":  "Feb 1, 2018 at 3:04:05pm (UTC)",
-			"second_format": time.RFC3339,
-		}
-		config = DefaultConfig()
-		stop   = make(chan os.Signal)
-		wg     sync.WaitGroup
-	)
-	defer close(stop)
-	signal.Notify(stop, syscall.SIGTERM, syscall.SIGINT)
+	mongoUrl := os.Getenv(MONGO_URL)
 
-	flag.StringVar(&format, "format", "first_format", "a first_format or second_format")
-	flag.StringVar(&logsCollectionName, "collection", "logs", "a logs mongodb collection name")
-	flag.Parse()
-
-	files := flag.Args()
-
-	logParser := NewLogParser(timeLayoutByFormat[format])
-
-	tracker := NewFileTracker(logParser, format)
-
-	for _, filename := range files {
-		if _, err := os.Stat(filename); os.IsNotExist(err) {
-			continue
-		}
-		stopTracking := make(chan struct{})
-		exitSync = append(exitSync, stopTracking)
-		wg.Add(1)
-		go tracker.Track(filename, stopTracking, &wg)
+	if mongoUrl == "" {
+		fmt.Println("Setup", MONGO_URL, "environment variable!")
+		return
 	}
 
-	session, err := mgo.Dial(config.MongoUrl)
+	exit := make(chan os.Signal)
+	defer close(exit)
+	signal.Notify(exit, syscall.SIGTERM, syscall.SIGINT)
+
+	logFormat := flag.String("format", "first_format", "a first_format or second_format")
+	logsCollectionName := flag.String("collection", "logs", "a logs mongodb collection name")
+	flag.Parse()
+
+	timeLayout, ok := lib.TimeLayoutByFormat[*logFormat]
+	if !ok {
+		flag.PrintDefaults()
+		return
+	}
+
+	session, err := mgo.Dial(mongoUrl)
 	if err != nil {
 		log.Println("Error establishing mongodb connection!")
-		panic(err)
+		return
 	}
 	defer session.Close()
 
-	logs := session.DB("").C(logsCollectionName)
-
-	for {
-		select {
-		case entry := <-tracker.Logs:
-			logs.Insert(&entry)
-		case <-stop:
-			for _, e := range exitSync {
-				close(e)
-			}
-			return
-		}
+	logsCollection := session.DB(DB_FROM_MONGO_URL).C(*logsCollectionName)
+	logEntryParser := lib.NewLogEntryParser(timeLayout, *logFormat)
+	fileWatcher := lib.NewFileWatcher(logEntryParser, *logFormat)
+	scheduler := &lib.WatchersScheduler{
+		LogsCollection: logsCollection,
+		FileWatcher:    fileWatcher,
+		Exit:           exit,
+		Files:          flag.Args(),
 	}
-	wg.Wait()
+
+	scheduler.Schedule()
 }
