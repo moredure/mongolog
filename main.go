@@ -7,8 +7,8 @@ import (
 	"gopkg.in/mgo.v2"
 	"log"
 	"os"
-	"os/signal"
 	"syscall"
+	"os/signal"
 )
 
 const (
@@ -24,9 +24,9 @@ func main() {
 		return
 	}
 	log.Println("Setting up os exit signal handler!")
-	exit := make(chan os.Signal)
+	exit := make(chan os.Signal, 1)
+	signal.Notify(exit, os.Interrupt, syscall.SIGTERM)
 	defer close(exit)
-	signal.Notify(exit, syscall.SIGTERM, syscall.SIGINT)
 
 	log.Println("Setting up flag parameters!")
 	logFormat := flag.String("format", "first_format", "a first_format or second_format")

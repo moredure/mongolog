@@ -4,6 +4,7 @@ import (
 	"github.com/hpcloud/tail"
 	"github.com/mikefaraponov/mongolog/models"
 	"log"
+	"os"
 	"sync"
 )
 
@@ -19,7 +20,15 @@ type FileWatcher struct {
 
 func (f *FileWatcher) Watch(filename string, exit chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()
-	t, err := tail.TailFile(filename, tail.Config{Follow: true})
+	file, err := os.Stat(filename);
+	if err != nil {
+	    return
+	}
+	seekInfo := &tail.SeekInfo{Offset: file.Size()}
+	t, err := tail.TailFile(filename, tail.Config{
+		Follow: true,
+		Location: seekInfo,
+	})
 	if err != nil {
 		log.Println("Error trying to watch the file", filename)
 		return
