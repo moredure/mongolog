@@ -1,9 +1,9 @@
 package lib
 
 import (
-	"gopkg.in/mgo.v2"
 	"os"
 	"sync"
+	"gopkg.in/mgo.v2"
 )
 
 type WatchersScheduler struct {
@@ -16,10 +16,9 @@ type WatchersScheduler struct {
 }
 
 func (s *WatchersScheduler) Schedule() {
-	defer s.WatchersSync.Wait()
-
 	s.startTailers()
 	s.trackLogs()
+	s.WatchersSync.Wait()
 }
 
 func (s *WatchersScheduler) startTailers() {
